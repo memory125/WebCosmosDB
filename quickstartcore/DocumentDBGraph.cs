@@ -60,10 +60,11 @@
         public static async Task<Vertex> InsertVertexAsync(string destVertex, Dictionary<string, string> dictionary)
         {
             Vertex result = null; 
-            string gremlinQuery = string.Format($"g.addV({destVertex})");            
+            string gremlinQuery = string.Format($"g.addV(\'{destVertex}\')");            
             foreach (KeyValuePair<string, string> property in dictionary)
             {
-                string propertyString = string.Format($".property({property.Key}, {property.Value})");
+                string propertyString = string.Format($".property(\'{property.Key}\', \'{property.Value}\')");
+                gremlinQuery += propertyString;
             }
            
             // gremlinQuery likes g.addV('person').property('id', 'mary').property('firstName', 'Mary').property('lastName', 'Andersen').property('age', 39)
@@ -106,7 +107,7 @@
 
         public static async void DeleteVertexAsync(string sourceVertex)
         {
-            string gremlinQuery = string.Format($"g.V({sourceVertex}').drop()");
+            string gremlinQuery = string.Format($"g.V(\'{sourceVertex}\').drop()");
             Console.WriteLine($"Running {gremlinQuery}");
 
             // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
@@ -127,7 +128,7 @@
         public static async void AddVertexEdgeAsync(string sourceVertex, string edgeLabel, string destVertext)
         {
             // gremlinQuery like "g.V('thomas').addE('knows').to(g.V('mary'))"
-            string gremlinQuery = string.Format($"g.V({sourceVertex}).addE({edgeLabel}).to(g.V({destVertext}))");
+            string gremlinQuery = string.Format($"g.V(\'{sourceVertex}\').addE(\'{edgeLabel}\').to(g.V(\'{destVertext}\'))");
             Console.WriteLine($"Running {gremlinQuery}");
 
             // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
@@ -211,7 +212,7 @@
         {
             try
             {
-                await client.ReadDocumentCollectionAsync(UriFactory.CreateDocumentCollectionUri(DatabaseId, CollectionId));
+               graph = await client.ReadDocumentCollectionAsync(UriFactory.CreateDocumentCollectionUri(DatabaseId, CollectionId));
             }
             catch (DocumentClientException e)
             {
