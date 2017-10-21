@@ -12,6 +12,7 @@
     using Microsoft.Azure.Graphs;
     using Newtonsoft.Json;
     using Microsoft.Azure.Graphs.Elements;
+    using System.IO;
 
     public static class DocumentDBGraph<T> where T : class
     {
@@ -42,9 +43,15 @@
 
         public static async Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate)
         {
+            //IDocumentQuery<T> query = client.CreateDocumentQuery<T>(
+            //    UriFactory.CreateDocumentCollectionUri(DatabaseId, CollectionId),
+            //    new FeedOptions { MaxItemCount = -1 })
+            //    .Where(predicate)
+            //    .AsDocumentQuery();
+
             IDocumentQuery<T> query = client.CreateDocumentQuery<T>(
                 UriFactory.CreateDocumentCollectionUri(DatabaseId, CollectionId),
-                new FeedOptions { MaxItemCount = -1 })
+                new FeedOptions { EnableCrossPartitionQuery = true })
                 .Where(predicate)
                 .AsDocumentQuery();
 
@@ -57,10 +64,72 @@
             return results;
         }
 
+        public static string GetJson(object obj)
+        {
+            var serializer = new JsonSerializer();
+
+            using (var writer = new StringWriter())
+            {
+                serializer.Formatting = Formatting.Indented;
+                serializer.Serialize(writer, obj);
+                writer.Flush();
+
+                return writer.ToString();
+            }
+        }
+        public static async Task<T[]> GetAllResultsAsync<T>(IDocumentQuery<T> queryAll)
+        {
+            var list = new List<T>();
+
+            while (queryAll.HasMoreResults)
+            {
+                var docs = await queryAll.ExecuteNextAsync<T>();
+
+                foreach (var d in docs)
+                {
+                    list.Add(d);
+                }
+            }
+
+            return list.ToArray();
+        }       
+
+        public static async Task<IEnumerable<T>> GetVertexItemsAsync(string vertexLabel = null)
+        {
+            string gremlinQuery = "g.V()";
+            List<T> result = new List<T>();
+
+            //g.V().hasLabel('person')
+            if (!string.IsNullOrEmpty(vertexLabel))
+            {
+                gremlinQuery = string.Format($"g.V().hasLabel(\'{vertexLabel}\')");
+            }               
+            
+            Console.WriteLine($"Running {gremlinQuery}");
+
+            // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
+            // results asychronously            
+            IDocumentQuery<dynamic> vertexquery = client.CreateGremlinQuery<dynamic>(graph, gremlinQuery);
+            while (vertexquery.HasMoreResults)
+            {
+                foreach (dynamic verquery in await vertexquery.ExecuteNextAsync())
+                {
+                    var jsonresult = JsonConvert.SerializeObject(verquery);
+                    var item = JsonConvert.DeserializeObject<T>(jsonresult);
+                    result.Add(item);                  
+                    Console.WriteLine($"\t {jsonresult}");
+                }
+            }
+            Console.WriteLine();
+
+            return await Task.FromResult<IEnumerable<T>>(result);
+        }
+
         public static async Task<Vertex> InsertVertexAsync(string destVertex, Dictionary<string, string> dictionary)
         {
             Vertex result = null; 
-            string gremlinQuery = string.Format($"g.addV(\'{destVertex}\')");            
+            string gremlinQuery = string.Format($"g.addV(\'{destVertex}\')"); 
+            //VertexProperty vertexProperty
             foreach (KeyValuePair<string, string> property in dictionary)
             {
                 string propertyString = string.Format($".property(\'{property.Key}\', \'{property.Value}\')");
