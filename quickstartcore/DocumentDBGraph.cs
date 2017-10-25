@@ -13,6 +13,7 @@
     using Newtonsoft.Json;
     using Microsoft.Azure.Graphs.Elements;
     using System.IO;
+    using System.Text;
 
     public static class DocumentDBGraph<T> where T : class
     {
@@ -20,6 +21,7 @@
         private static readonly string CollectionId = ConfigurationManager.AppSettings["collection"];
         private static DocumentClient client;
         private static DocumentCollection graph;
+        private static Encoding utf8 = Encoding.UTF8;
 
         public static async Task<T> GetItemAsync(string id)
         {
@@ -96,13 +98,13 @@
 
         public static async Task<IEnumerable<T>> GetVertexItemsAsync(string vertexLabel = null)
         {
-            string gremlinQuery = "g.V()";
+            string gremlinQuery = string.Format("g.V()", utf8);
             List<T> result = new List<T>();
 
             //g.V().hasLabel('person')
             if (!string.IsNullOrEmpty(vertexLabel))
             {
-                gremlinQuery = string.Format($"g.V().hasLabel(\'{vertexLabel}\')");
+                gremlinQuery = string.Format($"g.V().hasLabel(\'{vertexLabel}\')", utf8);
             }               
             
             Console.WriteLine($"Running {gremlinQuery}");
@@ -110,13 +112,28 @@
             // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
             // results asychronously            
             IDocumentQuery<dynamic> vertexquery = client.CreateGremlinQuery<dynamic>(graph, gremlinQuery);
+            // First 
+            //var all = await GetAllResultsAsync(vertexquery);
+            //Console.WriteLine($"Collection contains {all.Length} documents:");
+
+            //foreach (var d in all)
+            //{
+            //    var json = GetJson(d);
+            //    var item = JsonConvert.DeserializeObject<T>(json);
+            //    result.Add(item);
+            //    Console.WriteLine(json);
+            //}
+
+            // Second 
             while (vertexquery.HasMoreResults)
             {
                 foreach (dynamic verquery in await vertexquery.ExecuteNextAsync())
                 {
                     var jsonresult = JsonConvert.SerializeObject(verquery);
-                    var item = JsonConvert.DeserializeObject<T>(jsonresult);
-                    result.Add(item);                  
+                    var item = JsonConvert.DeserializeObject<T>(jsonresult);                   
+                    //result.Add(verquery);   
+                    result.Add(item);
+                    //result.AddRange(item);
                     Console.WriteLine($"\t {jsonresult}");
                 }
             }
@@ -125,27 +142,31 @@
             return await Task.FromResult<IEnumerable<T>>(result);
         }
 
-        public static async Task<Vertex> InsertVertexAsync(string destVertex, Dictionary<string, string> dictionary)
+        public static async Task<T> InsertVertexAsync(string destVertex, Dictionary<string, string> dictionary)
         {
-            Vertex result = null; 
-            string gremlinQuery = string.Format($"g.addV(\'{destVertex}\')"); 
+            T result = null;
+   
+            string gremlinQuery = string.Format($"g.addV(\'{destVertex}\')", utf8);
+           
             //VertexProperty vertexProperty
             foreach (KeyValuePair<string, string> property in dictionary)
             {
-                string propertyString = string.Format($".property(\'{property.Key}\', \'{property.Value}\')");
+                string propertyString = string.Format($".property(\'{property.Key}\', \'{property.Value}\')", utf8);
                 gremlinQuery += propertyString;
             }
-           
+
+            //VertexProperty [] vertexProperty = new VertexProperty(dictionary); 
+
             // gremlinQuery likes g.addV('person').property('id', 'mary').property('firstName', 'Mary').property('lastName', 'Andersen').property('age', 39)
 
             Console.WriteLine($"Running {gremlinQuery}");
 
             // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
             // results asychronously
-            IDocumentQuery<Vertex> addVertex = client.CreateGremlinQuery<Vertex>(graph, gremlinQuery);
+            IDocumentQuery<T> addVertex = client.CreateGremlinQuery<T>(graph, gremlinQuery);
             while (addVertex.HasMoreResults)
             {
-                foreach (Vertex vertex in await addVertex.ExecuteNextAsync<Vertex>())
+                foreach (T vertex in await addVertex.ExecuteNextAsync<T>())
                 {
                     // Since Gremlin is designed for multi-valued properties, the format returns an array. Here we just read
                     // the first value
@@ -155,12 +176,50 @@
             }
             Console.WriteLine();
 
-            return await Task.FromResult<Vertex>(result);
+            return await Task.FromResult<T>(result);
+        }
+
+        public static async Task<T> InsertVertexAsync(string destVertex, string itemProperty)
+        {
+            T result = null;
+
+            var itemPros = itemProperty.Remove(0, 1);
+            itemPros = itemPros.Remove(itemPros.Length - 1, 1);
+            itemPros = itemPros.Replace('\"', '\'');
+            string[] strArray = itemPros.Split(',');
+
+            string gremlinQuery = string.Format($"g.addV(\'{destVertex}\')", utf8);
+
+            foreach (string str in strArray)
+            {
+                string[] item = str.Split(':');
+                string propertyString = string.Format($".property({item[0]}, {item[1]})", utf8);
+                gremlinQuery += propertyString;
+            }          
+            
+            Console.WriteLine($"Running {gremlinQuery}");
+
+            // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
+            // results asychronously
+            IDocumentQuery<T> addVertex = client.CreateGremlinQuery<T>(graph, gremlinQuery);
+            while (addVertex.HasMoreResults)
+            {
+                foreach (T vertex in await addVertex.ExecuteNextAsync<T>())
+                {
+                    // Since Gremlin is designed for multi-valued properties, the format returns an array. Here we just read
+                    // the first value
+                    result = vertex;
+                    Console.WriteLine($"\t {JsonConvert.SerializeObject(vertex)}");
+                }
+            }
+            Console.WriteLine();
+
+            return await Task.FromResult<T>(result);
         }
 
         public static async void CleanUpVertexAsync()
         {
-            string gremlinQuery = "g.V().drop()";
+            string gremlinQuery = string.Format("g.V().drop()", utf8);
             IDocumentQuery<Vertex> clrupVertex = client.CreateGremlinQuery<Vertex>(graph, gremlinQuery);
             while (clrupVertex.HasMoreResults)
             {
@@ -176,7 +235,7 @@
 
         public static async void DeleteVertexAsync(string sourceVertex)
         {
-            string gremlinQuery = string.Format($"g.V(\'{sourceVertex}\').drop()");
+            string gremlinQuery = string.Format($"g.V(\'{sourceVertex}\').drop()", utf8);
             Console.WriteLine($"Running {gremlinQuery}");
 
             // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
@@ -197,7 +256,7 @@
         public static async void AddVertexEdgeAsync(string sourceVertex, string edgeLabel, string destVertext)
         {
             // gremlinQuery like "g.V('thomas').addE('knows').to(g.V('mary'))"
-            string gremlinQuery = string.Format($"g.V(\'{sourceVertex}\').addE(\'{edgeLabel}\').to(g.V(\'{destVertext}\'))");
+            string gremlinQuery = string.Format($"g.V(\'{sourceVertex}\').addE(\'{edgeLabel}\').to(g.V(\'{destVertext}\'))", utf8);
             Console.WriteLine($"Running {gremlinQuery}");
 
             // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
@@ -218,7 +277,7 @@
         public static async Task<Int64> GetVertexCountAsync()
         {
             Int64 count = 0;
-            string gremlinQuery = "g.V().count()";
+            string gremlinQuery = string.Format("g.V().count()", utf8);
            
             IDocumentQuery<Int64> VertexCount = client.CreateGremlinQuery<Int64>(graph, gremlinQuery);
             while (VertexCount.HasMoreResults)
@@ -236,7 +295,7 @@
         public static async Task<Int64> GetEdgeCountAsync()
         {
             Int64 count = 0;
-            string gremlinQuery = "g.E().count()";
+            string gremlinQuery = string.Format("g.E().count()", utf8);
 
             IDocumentQuery<Int64> EdgeCount = client.CreateGremlinQuery<Int64>(graph, gremlinQuery);
             while (EdgeCount.HasMoreResults)
