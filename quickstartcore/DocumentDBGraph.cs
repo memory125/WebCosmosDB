@@ -14,6 +14,8 @@
     using Microsoft.Azure.Graphs.Elements;
     using System.IO;
     using System.Text;
+    using Newtonsoft.Json.Linq;
+    using todo.Models;
 
     public static class DocumentDBGraph<T> where T : class
     {
@@ -111,30 +113,23 @@
 
             // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
             // results asychronously            
-            IDocumentQuery<dynamic> vertexquery = client.CreateGremlinQuery<dynamic>(graph, gremlinQuery);
-            // First 
-            //var all = await GetAllResultsAsync(vertexquery);
-            //Console.WriteLine($"Collection contains {all.Length} documents:");
-
-            //foreach (var d in all)
-            //{
-            //    var json = GetJson(d);
-            //    var item = JsonConvert.DeserializeObject<T>(json);
-            //    result.Add(item);
-            //    Console.WriteLine(json);
-            //}
-
-            // Second 
+            IDocumentQuery<Vertex> vertexquery = client.CreateGremlinQuery<Vertex>(graph, gremlinQuery);
             while (vertexquery.HasMoreResults)
             {
-                foreach (dynamic verquery in await vertexquery.ExecuteNextAsync())
-                {
-                    var jsonresult = JsonConvert.SerializeObject(verquery);
-                    var item = JsonConvert.DeserializeObject<T>(jsonresult);                   
-                    //result.Add(verquery);   
+                foreach (Vertex verquery in await vertexquery.ExecuteNextAsync<Vertex>())
+                {                                 
+                    var newitem = new Item();
+                    newitem.Id = (string)verquery.Id;
+                    newitem.Name = (string)verquery.GetVertexProperties("name").First().Value; ;
+                    newitem.Description = (string)verquery.GetVertexProperties("description").First().Value;
+                    newitem.Completed = (bool)verquery.GetVertexProperties("isComplete").First().Value;
+                    var itemProperty = JsonConvert.SerializeObject(newitem);
+                    var item = JsonConvert.DeserializeObject<T>(itemProperty);   
                     result.Add(item);
+                    //result.Add(verquery);   
+                    //result.Add(verquery);
                     //result.AddRange(item);
-                    Console.WriteLine($"\t {jsonresult}");
+                    Console.WriteLine($"\t {itemProperty}");                    
                 }
             }
             Console.WriteLine();
@@ -215,6 +210,19 @@
             Console.WriteLine();
 
             return await Task.FromResult<T>(result);
+        }
+
+        public static void GetItemFromJson(string jsonText)
+        {
+            JObject jo = JObject.Parse(jsonText);
+            string[] values = jo.Properties().Select(item => item.Value.ToString()).ToArray();
+
+           // var id = values[0];
+           // var items = values[3];
+           // JObject jon = JObject.Parse(items);
+
+            //var name = jon.First;
+
         }
 
         public static async void CleanUpVertexAsync()
