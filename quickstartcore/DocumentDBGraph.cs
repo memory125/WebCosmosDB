@@ -25,24 +25,44 @@
         private static DocumentCollection graph;
         private static Encoding utf8 = Encoding.UTF8;
 
-        public static async Task<T> GetItemAsync(string id)
+        public static async Task<T> GetItemAsync(string id, string vertexLabel = null)
         {
-            try
+            T result = null;
+            string gremlinQuery = string.Format("g.V()", utf8);
+           
+            //g.V().hasLabel('person')
+            if (!string.IsNullOrEmpty(vertexLabel))
             {
-                Document document = await client.ReadDocumentAsync(UriFactory.CreateDocumentUri(DatabaseId, CollectionId, id));
-                return (T)(dynamic)document;
+                gremlinQuery = string.Format($"g.V().hasLabel(\'{vertexLabel}\')", utf8);
             }
-            catch (DocumentClientException e)
+            gremlinQuery += string.Format($".has('id', \'{id}\')", utf8);
+
+            Console.WriteLine($"Running {gremlinQuery}");
+
+            // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
+            // results asychronously            
+            IDocumentQuery<Vertex> vertexquery = client.CreateGremlinQuery<Vertex>(graph, gremlinQuery);
+            while (vertexquery.HasMoreResults)
             {
-                if (e.StatusCode == System.Net.HttpStatusCode.NotFound)
+                foreach (Vertex verquery in await vertexquery.ExecuteNextAsync<Vertex>())
                 {
-                    return null;
-                }
-                else
-                {
-                    throw;
+                    var newitem = new Item();
+                    newitem.Id = (string)verquery.Id;
+                    newitem.Name = (string)verquery.GetVertexProperties("name").First().Value; ;
+                    newitem.Description = (string)verquery.GetVertexProperties("description").First().Value;
+                    newitem.Completed = (bool)verquery.GetVertexProperties("isComplete").First().Value;
+                    var itemProperty = JsonConvert.SerializeObject(newitem);
+                    var item = JsonConvert.DeserializeObject<T>(itemProperty);
+                    result = item;
+                    //result.Add(verquery);   
+                    //result.Add(verquery);
+                    //result.AddRange(item);
+                    Console.WriteLine($"\t {itemProperty}");
                 }
             }
+            Console.WriteLine();
+
+            return await Task.FromResult<T>(result);
         }
 
         public static async Task<IEnumerable<T>> GetItemsAsync(Expression<Func<T, bool>> predicate)
@@ -211,20 +231,7 @@
 
             return await Task.FromResult<T>(result);
         }
-
-        public static void GetItemFromJson(string jsonText)
-        {
-            JObject jo = JObject.Parse(jsonText);
-            string[] values = jo.Properties().Select(item => item.Value.ToString()).ToArray();
-
-           // var id = values[0];
-           // var items = values[3];
-           // JObject jon = JObject.Parse(items);
-
-            //var name = jon.First;
-
-        }
-
+        
         public static async void CleanUpVertexAsync()
         {
             string gremlinQuery = string.Format("g.V().drop()", utf8);
@@ -241,9 +248,18 @@
             Console.WriteLine();
         }
 
-        public static async void DeleteVertexAsync(string sourceVertex)
+        public static async Task<bool> DeleteVertexAsync(string id, string vertexLabel = null)
         {
-            string gremlinQuery = string.Format($"g.V(\'{sourceVertex}\').drop()", utf8);
+            bool result = false; 
+            string gremlinQuery = string.Format("g.V()", utf8);
+
+            //g.V().hasLabel('person')
+            if (!string.IsNullOrEmpty(vertexLabel))
+            {
+                gremlinQuery = string.Format($"g.V().hasLabel(\'{vertexLabel}\')", utf8);
+            }
+
+            gremlinQuery += string.Format($".has('id', \'{id}\').drop()", utf8);
             Console.WriteLine($"Running {gremlinQuery}");
 
             // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
@@ -255,10 +271,13 @@
                 {
                     // Since Gremlin is designed for multi-valued properties, the format returns an array. Here we just read
                     // the first value
+                    result = true;
                     Console.WriteLine($"\t {JsonConvert.SerializeObject(vertex)}");
                 }
             }
             Console.WriteLine();
+
+            return await Task.FromResult<bool>(result);
         }
 
         public static async void AddVertexEdgeAsync(string sourceVertex, string edgeLabel, string destVertext)
