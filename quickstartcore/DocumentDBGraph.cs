@@ -194,9 +194,9 @@
             return await Task.FromResult<T>(result);
         }
 
-        public static async Task<T> InsertVertexAsync(string destVertex, string itemProperty)
+        public static async Task<bool> InsertVertexAsync(string destVertex, string itemProperty)
         {
-            T result = null;
+            bool result = false;
 
             var itemPros = itemProperty.Remove(0, 1);
             itemPros = itemPros.Remove(itemPros.Length - 1, 1);
@@ -216,22 +216,65 @@
 
             // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
             // results asychronously
-            IDocumentQuery<T> addVertex = client.CreateGremlinQuery<T>(graph, gremlinQuery);
+            IDocumentQuery<dynamic> addVertex = client.CreateGremlinQuery<dynamic>(graph, gremlinQuery);
             while (addVertex.HasMoreResults)
             {
-                foreach (T vertex in await addVertex.ExecuteNextAsync<T>())
+                foreach (dynamic vertex in await addVertex.ExecuteNextAsync())
                 {
                     // Since Gremlin is designed for multi-valued properties, the format returns an array. Here we just read
                     // the first value
-                    result = vertex;
+                    result = true;
                     Console.WriteLine($"\t {JsonConvert.SerializeObject(vertex)}");
                 }
             }
             Console.WriteLine();
 
-            return await Task.FromResult<T>(result);
+            return await Task.FromResult<bool>(result);
         }
-        
+
+        public static async Task<bool> UpdateVertexAsync(string destVertex, string id, string itemProperty)
+        {
+            bool result = false;
+
+            var itemPros = itemProperty.Remove(0, 1);
+            itemPros = itemPros.Remove(itemPros.Length - 1, 1);
+            itemPros = itemPros.Replace('\"', '\'');
+            string[] strArray = itemPros.Split(',');
+
+            string gremlinQuery = string.Format($"g.V(\'{id}\')", utf8);
+
+            foreach (string str in strArray)
+            {
+                var gremUpdate = gremlinQuery;
+                string[] item = str.Split(':');
+                if (!item[0].Equals("\'id\'"))
+                {
+                    string propertyString = string.Format($".property({item[0]}, {item[1]})", utf8);
+                    // The CreateGremlinQuery method extensions allow you to execute Gremlin queries and iterate
+                    // results asychronously
+                    gremUpdate += propertyString;
+
+                    Console.WriteLine($"Running {gremUpdate}");
+
+                    IDocumentQuery<dynamic> updateVertex = client.CreateGremlinQuery<dynamic>(graph, gremUpdate);
+                    while (updateVertex.HasMoreResults)
+                    {
+                        foreach (dynamic vertex in await updateVertex.ExecuteNextAsync())
+                        {
+                            // Since Gremlin is designed for multi-valued properties, the format returns an array. Here we just read
+                            // the first value
+                            result = true;
+                            Console.WriteLine($"\t {JsonConvert.SerializeObject(vertex)}");
+                        }
+                    }
+                }                    
+            }           
+            
+            Console.WriteLine();
+
+            return await Task.FromResult<bool>(result);
+        }
+
         public static async void CleanUpVertexAsync()
         {
             string gremlinQuery = string.Format("g.V().drop()", utf8);
