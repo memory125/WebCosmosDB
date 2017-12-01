@@ -1,6 +1,6 @@
 # WebCosmosDB
 
-* This repo is primary for Azure Cosmos DB, which includes Web App (AdsDasboard, azure-cosmosDB-dotnet, mongdb-dotnet, quickstartcore), console app (table-dotnet) and maven project (document-spring).
+* This repo is primary for Azure Cosmos DB, which includes Web App (AdsDashboard, azure-cosmosDB-dotnet, mongdb-dotnet, quickstartcore), console app (table-dotnet) and maven project (document-spring).
 
 ## AdsDashboard
 >* This web app is developed by .net framework.
@@ -31,14 +31,14 @@
 >* This web app is developed by .net framework.
 >* You should create the Azure Cosmos DB with MongoDB API first.
 >* Copy the url & key or connectionstring from the cosmos graph database created above.
->* Replace "endpoint", "authkey", "database" and "collection" with your real keys in Web.config.
+>* Replace "DefaultConnection" with your real keys in Web.config.
 >* Run this sample via Visual Studio 2017.
 
 ## quickstartcore
 >* This web app is developed by .net core.
 >* You should create the Azure Cosmos DB with SQL API first.
 >* Copy the url & key or connectionstring from the cosmos graph database created above.
->* Replace "endpoint", "authkey", "database" and "collection" with your real keys in Web.config.
+>* Replace "endpoint", "authkey", "database" and "collection" with your real keys in DocumentDBRepository.cs.
 >* Run this sample via Visual Studio 2017.
 
 ## table-dotnet
